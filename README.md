@@ -80,18 +80,20 @@ Usage:
         Install and start as a systemd service (requires root)
   -install-service
         Generate systemd service file
+  -listen string
+        Address to listen on (e.g. 127.0.0.1:2211, :2211 for all interfaces) (default "127.0.0.1:2211")
   -node-path string
         Extra PATH entry (e.g. fnm node bin dir) appended for node subprocesses
   -opencode-binary string
         Path to the opencode binary (default "opencode")
-  -port string
-        Port to listen on (default "2211")
   -provider string
         Default provider prefix for model IDs without a provider (default "opencode")
   -run string
         Execute a single prompt via opencode CLI and exit (no HTTP server)
   -session string
         Continue the given opencode session ID for every request
+  -token string
+        Bearer token required for API access (default: $OPENGATE_TOKEN)
 ```
 
 ### Configuration File
@@ -123,6 +125,31 @@ You can override global settings per request using custom HTTP headers:
 | `X-Session-Id` | `last` | Continues the most recent session in the `sessions/` directory. |
 | `X-Session-Id` | `[string]` | Uses/creates a specific session ID (e.g. `my-chat-session`). |
 | `X-Auto-Approve` | `true` | Enables auto-approval for tools in this request (skips prompts). |
+| `Authorization` | `Bearer <token>` | Required when a `-token` is configured. |
+
+### Exposing to Other Machines
+
+By default OpenGate binds to `127.0.0.1` only, so it is **not** reachable from other machines. Since the API can execute arbitrary commands via `opencode`, think carefully before exposing it.
+
+To accept connections from the local network:
+
+```bash
+./opengate -listen :2211 -token "change-me"
+```
+
+Every client must then send the token, e.g.:
+
+```bash
+curl http://192.168.1.10:2211/v1/models -H "Authorization: Bearer change-me"
+```
+
+Recommended setups for remote access:
+
+- **SSH tunnel** (no port open): on the client run `ssh -N -L 2211:localhost:2211 user@host` and use `http://localhost:2211`. Requires `-listen 127.0.0.1:2211` (the default).
+- **Reverse proxy with TLS** (Caddy/Nginx): keep the default localhost bind, proxy `127.0.0.1:2211` over HTTPS, and terminate TLS at the proxy.
+- **VPN (Tailscale/WireGuard)**: expose the port only inside your private network.
+
+Avoid publishing port `2211` directly on the internet without TLS or an extra auth layer.
 
 ### Examples
 

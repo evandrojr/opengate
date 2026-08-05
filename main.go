@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -450,7 +451,8 @@ func installAsService() {
 }
 
 var (
-	portFlag        string
+	listenAddr      string
+	token           string
 	workingDir      string
 	provider        string
 	autoApprove     bool
@@ -466,7 +468,8 @@ func main() {
 	autoCfg := flag.Bool("auto-config", false, "Resolve opencode binary and node path, write ~/.opengate/config.json and exit")
 	configFlag := flag.String("config", "", "Path to config file (default: ~/.opengate/config.json)")
 	runFlag := flag.String("run", "", "Execute a single prompt via opencode CLI and exit (no HTTP server)")
-	flag.StringVar(&portFlag, "port", "2211", "Port to listen on")
+	flag.StringVar(&listenAddr, "listen", "127.0.0.1:2211", "Address to listen on (e.g. 127.0.0.1:2211, :2211 for all interfaces)")
+	flag.StringVar(&token, "token", os.Getenv("OPENGATE_TOKEN"), "Bearer token required for API access (default: $OPENGATE_TOKEN)")
 	flag.StringVar(&workingDir, "dir", "", "Working directory for opencode sessions (default: current directory)")
 	flag.StringVar(&provider, "provider", "opencode", "Default provider prefix for model IDs without a provider")
 	defaultBinary := os.Getenv("OPENCODE_BINARY")
@@ -501,9 +504,9 @@ func main() {
 	if cfgPath == "" {
 		cfgPath = defaultConfigPath()
 	}
+	set := map[string]bool{}
+	flag.Visit(func(f *flag.Flag) { set[f.Name] = true })
 	if cfg, err := loadConfig(cfgPath); err == nil {
-		set := map[string]bool{}
-		flag.Visit(func(f *flag.Flag) { set[f.Name] = true })
 		if !set["opencode-binary"] {
 			OpenCodeBinary = cfg.OpenCodeBinary
 		}
@@ -541,17 +544,33 @@ func main() {
 		return
 	}
 
-	http.HandleFunc("/v1/models", handleModels)
-	http.HandleFunc("/v1/chat/completions", handleChatCompletions)
+	http.HandleFunc("/v1/models", withAuth(handleModels))
+	http.HandleFunc("/v1/chat/completions", withAuth(handleChatCompletions))
 
-	log.Printf("Server starting on port %s...\n", portFlag)
-	if err := http.ListenAndServe(":"+portFlag, nil); err != nil {
+	log.Printf("Server starting on %s...\n", listenAddr)
+	if err := http.ListenAndServe(listenAddr, nil); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
 }
 
 // runCLI executes a single prompt directly via opencode and prints the
 // assistant text to stdout, bypassing the HTTP server entirely.
+// withAuth protects handlers with a Bearer token when one is configured.
+func withAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if token != "" {
+			auth := r.Header.Get("Authorization")
+			if !strings.HasPrefix(auth, "Bearer ") ||
+				subtle.ConstantTimeCompare([]byte(strings.TrimPrefix(auth, "Bearer ")), []byte(token)) != 1 {
+				w.Header().Set("WWW-Authenticate", `Bearer realm="opengate"`)
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
+		next(w, r)
+	}
+}
+
 func runCLI(prompt string) error {
 	var out strings.Builder
 	var usage Usage
