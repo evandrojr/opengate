@@ -62,6 +62,12 @@ func autoConfig() error {
 		return fmt.Errorf("could not find opencode binary %q in PATH: %w", bin, err)
 	}
 
+	// Resolve symlinks (e.g. fnm multishell shims) so the stored path is
+	// stable across shells and reboots.
+	if real, err := filepath.EvalSymlinks(resolved); err == nil {
+		resolved = real
+	}
+
 	cwd, _ := os.Getwd()
 	cfg := Config{
 		OpenCodeBinary: resolved,
