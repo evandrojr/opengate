@@ -1,0 +1,12 @@
+# Compiled binary
+/opengate
+
+# Local logs
+*.log
+
+# Temp service files
+*.service
+
+# Go test artifacts
+*.test
+*.out

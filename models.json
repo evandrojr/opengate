@@ -1,0 +1,21 @@
+[
+  {"id": "opencode/big-pickle", "object": "model", "created": 1700000000, "owned_by": "opencode"},
+  {"id": "opencode/deepseek-v4-flash-free", "object": "model", "created": 1700000000, "owned_by": "opencode"},
+  {"id": "opencode/laguna-s-2.1-free", "object": "model", "created": 1700000000, "owned_by": "opencode"},
+  {"id": "opencode/ling-3.0-flash-free", "object": "model", "created": 1700000000, "owned_by": "opencode"},
+  {"id": "opencode/longcat-2.0-free", "object": "model", "created": 1700000000, "owned_by": "opencode"},
+  {"id": "opencode/mimo-v2.5-free", "object": "model", "created": 1700000000, "owned_by": "opencode"},
+  {"id": "opencode/nemotron-3-ultra-free", "object": "model", "created": 1700000000, "owned_by": "opencode"},
+  {"id": "opencode/north-mini-code-free", "object": "model", "created": 1700000000, "owned_by": "opencode"},
+  {"id": "google-vertex/gemini-2.5-flash", "object": "model", "created": 1700000000, "owned_by": "google"},
+  {"id": "google-vertex/gemini-2.5-pro", "object": "model", "created": 1700000000, "owned_by": "google"},
+  {"id": "google-vertex/gemini-3-flash-preview", "object": "model", "created": 1700000000, "owned_by": "google"},
+  {"id": "google-vertex/gemini-3.1-flash-lite", "object": "model", "created": 1700000000, "owned_by": "google"},
+  {"id": "google-vertex/gemini-3.1-pro-preview", "object": "model", "created": 1700000000, "owned_by": "google"},
+  {"id": "google-vertex/gemini-3.5-flash", "object": "model", "created": 1700000000, "owned_by": "google"},
+  {"id": "google-vertex/claude-sonnet-5@default", "object": "model", "created": 1700000000, "owned_by": "anthropic"},
+  {"id": "google-vertex/claude-opus-5@default", "object": "model", "created": 1700000000, "owned_by": "anthropic"},
+  {"id": "openai/gpt-4o-mini", "object": "model", "created": 1700000000, "owned_by": "openai"},
+  {"id": "openai/gpt-5.1", "object": "model", "created": 1700000000, "owned_by": "openai"},
+  {"id": "openai/gpt-5.5", "object": "model", "created": 1700000000, "owned_by": "openai"}
+]
