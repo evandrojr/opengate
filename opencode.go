@@ -69,7 +69,11 @@ func runOpenCode(opts RunOptions, onEvent func(OpenCodeEvent) error) error {
 	args = append(args, opts.Prompt)
 
 	cmd := exec.Command(OpenCodeBinary, args...)
-	cmd.Env = append(os.Environ(), "PATH="+os.Getenv("PATH")+OpenCodePath)
+	if OpenCodePath != "" {
+		cmd.Env = append(os.Environ(), "PATH="+os.Getenv("PATH")+string(os.PathListSeparator)+OpenCodePath)
+	} else {
+		cmd.Env = os.Environ()
+	}
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

@@ -3,7 +3,7 @@
 # OpenGate Server Test Script
 # Testa os endpoints principais do servidor (modelos e chat, com e sem streaming).
 
-PORT=${1:-8000}
+PORT=${1:-2211}
 URL="http://localhost:$PORT"
 MODEL=${2:-opencode/big-pickle}
 

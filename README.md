@@ -26,12 +26,12 @@ OpenGate is an OpenAI-compatible proxy server for the `opencode` CLI. It allows 
 
 Start the server:
 ```bash
-./opengate -port 8000
+./opengate -port 2211
 ```
 
 ### Configuration Flags
 
-- `-port`: Port to listen on (default: 8000).
+- `-port`: Port to listen on (default: 2211).
 - `-dir`: Working directory for opencode sessions.
 - `-auto`: Global auto-approve for tool permissions.
 - `-continue`: Always continue the last session.
@@ -52,7 +52,7 @@ You can override global settings per request using custom HTTP headers:
 
 #### Basic Chat Completion
 ```bash
-curl -X POST http://localhost:8000/v1/chat/completions \
+curl -X POST http://localhost:2211/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "opencode/big-pickle",
@@ -62,7 +62,7 @@ curl -X POST http://localhost:8000/v1/chat/completions \
 
 #### Continuing a Session
 ```bash
-curl -X POST http://localhost:8000/v1/chat/completions \
+curl -X POST http://localhost:2211/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "X-Session-Id: last" \
   -d '{
@@ -73,7 +73,7 @@ curl -X POST http://localhost:8000/v1/chat/completions \
 
 #### Streaming with Auto-Approve
 ```bash
-curl -N -X POST http://localhost:8000/v1/chat/completions \
+curl -N -X POST http://localhost:2211/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "X-Auto-Approve: true" \
   -d '{

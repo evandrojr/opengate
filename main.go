@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -315,16 +317,41 @@ func handleStream(w http.ResponseWriter, req ChatCompletionRequest, opts RunOpti
 	flusher.Flush()
 }
 
-func installService() {
+// serviceUser returns the name of the user the systemd service should run as.
+// Under sudo the original user is available via SUDO_USER, otherwise USER.
+func serviceUser() string {
+	if u := os.Getenv("SUDO_USER"); u != "" {
+		return u
+	}
+	return os.Getenv("USER")
+}
+
+// effectiveHome returns the home directory of the user the service runs as.
+// Under sudo HOME points to root's home, so we resolve the real user's home.
+func effectiveHome() string {
+	if u := os.Getenv("SUDO_USER"); u != "" {
+		if lu, err := user.Lookup(u); err == nil && lu.HomeDir != "" {
+			return lu.HomeDir
+		}
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return home
+}
+
+// buildServiceFile renders the systemd unit for this executable.
+func buildServiceFile() (string, error) {
 	exePath, err := os.Executable()
 	if err != nil {
-		log.Fatalf("Error getting executable path: %v", err)
+		return "", fmt.Errorf("getting executable path: %w", err)
 	}
 	exePath, _ = filepath.Abs(exePath)
 	workDir := filepath.Dir(exePath)
 
 	ocPath, nodePath := OpenCodeBinary, OpenCodePath
-	if cfg, err := loadConfig(defaultConfigPath()); err == nil {
+	if cfg, err := loadConfig(filepath.Join(effectiveHome(), ".opengate", "config.json")); err == nil {
 		if cfg.OpenCodeBinary != "" {
 			ocPath = cfg.OpenCodeBinary
 		}
@@ -346,7 +373,8 @@ func installService() {
 		pathEnv = nodePath + ":" + pathEnv
 	}
 
-	serviceContent := fmt.Sprintf(`[Unit]
+	user := serviceUser()
+	return fmt.Sprintf(`[Unit]
 Description=OpenGate OpenAI Proxy Server
 After=network.target
 
@@ -361,11 +389,17 @@ Environment=PATH=%s
 
 [Install]
 WantedBy=multi-user.target
-`, exePath, workDir, workDir, os.Getenv("USER"), os.Getenv("USER"), ocPath, pathEnv)
+`, exePath, workDir, workDir, user, user, ocPath, pathEnv), nil
+}
+
+func installService() {
+	serviceContent, err := buildServiceFile()
+	if err != nil {
+		log.Fatalf("Error building service file: %v", err)
+	}
 
 	servicePath := "/tmp/opengate.service"
-	err = os.WriteFile(servicePath, []byte(serviceContent), 0644)
-	if err != nil {
+	if err := os.WriteFile(servicePath, []byte(serviceContent), 0644); err != nil {
 		log.Fatalf("Error writing temporary service file: %v", err)
 	}
 
@@ -376,6 +410,43 @@ WantedBy=multi-user.target
 	fmt.Println("  sudo systemctl enable opengate")
 	fmt.Println("  sudo systemctl start opengate")
 	fmt.Println("  sudo systemctl status opengate")
+}
+
+// installAsService writes the unit to /etc/systemd/system and enables and
+// starts it. Requires root; run with sudo.
+func installAsService() {
+	if runtime.GOOS != "linux" {
+		log.Fatalf("systemd service installation is only supported on Linux")
+	}
+	if os.Geteuid() != 0 {
+		log.Fatalf("root privileges required, run with sudo")
+	}
+
+	serviceContent, err := buildServiceFile()
+	if err != nil {
+		log.Fatalf("Error building service file: %v", err)
+	}
+
+	servicePath := "/etc/systemd/system/opengate.service"
+	if err := os.WriteFile(servicePath, []byte(serviceContent), 0644); err != nil {
+		log.Fatalf("Error writing service file: %v", err)
+	}
+	fmt.Printf("Service file written to %s\n", servicePath)
+
+	for _, step := range []struct {
+		args []string
+		desc string
+	}{
+		{[]string{"daemon-reload"}, "daemon-reload"},
+		{[]string{"enable", "opengate"}, "enable"},
+		{[]string{"start", "opengate"}, "start"},
+	} {
+		if out, err := exec.Command("systemctl", step.args...).CombinedOutput(); err != nil {
+			log.Printf("systemctl %s failed: %v\n%s", step.desc, err, out)
+		} else {
+			fmt.Printf("systemctl %s: ok\n", step.desc)
+		}
+	}
 }
 
 var (
@@ -391,10 +462,11 @@ func main() {
 	help := flag.Bool("help", false, "Show help")
 	h := flag.Bool("h", false, "Show help")
 	install := flag.Bool("install-service", false, "Generate systemd service file")
+	installNow := flag.Bool("install", false, "Install and start as a systemd service (requires root)")
 	autoCfg := flag.Bool("auto-config", false, "Resolve opencode binary and node path, write ~/.opengate/config.json and exit")
 	configFlag := flag.String("config", "", "Path to config file (default: ~/.opengate/config.json)")
 	runFlag := flag.String("run", "", "Execute a single prompt via opencode CLI and exit (no HTTP server)")
-	flag.StringVar(&portFlag, "port", "8000", "Port to listen on")
+	flag.StringVar(&portFlag, "port", "2211", "Port to listen on")
 	flag.StringVar(&workingDir, "dir", "", "Working directory for opencode sessions (default: current directory)")
 	flag.StringVar(&provider, "provider", "opencode", "Default provider prefix for model IDs without a provider")
 	defaultBinary := os.Getenv("OPENCODE_BINARY")
@@ -445,6 +517,11 @@ func main() {
 
 	if *install {
 		installService()
+		return
+	}
+
+	if *installNow {
+		installAsService()
 		return
 	}
 

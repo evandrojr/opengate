@@ -61,9 +61,6 @@ func autoConfig() error {
 	if err != nil {
 		return fmt.Errorf("could not find opencode binary %q in PATH: %w", bin, err)
 	}
-	if real, err := filepath.EvalSymlinks(resolved); err == nil {
-		resolved = real
-	}
 
 	cwd, _ := os.Getwd()
 	cfg := Config{
