@@ -167,27 +167,44 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	model := resolveModel(req.Model)
-	if req.Stream {
-		handleStream(w, req, model, prompt)
-		return
-	}
-	handleNonStream(w, req, model, prompt)
-}
-
-func handleNonStream(w http.ResponseWriter, req ChatCompletionRequest, model, prompt string) {
-	var content strings.Builder
-	var usage Usage
-
-	log.Printf("Running opencode (model=%s, %d chars)\n", model, len(prompt))
-
-	err := runOpenCode(RunOptions{
+	opts := RunOptions{
 		Model:     model,
 		Prompt:    prompt,
 		Directory: workingDir,
 		Auto:      autoApprove,
 		Continue:  continueSession,
 		Session:   sessionID,
-	}, func(ev OpenCodeEvent) error {
+	}
+
+	// Override with headers if present
+	if auto := r.Header.Get("X-Auto-Approve"); auto != "" {
+		opts.Auto = (auto == "true")
+	}
+	if sid := r.Header.Get("X-Session-Id"); sid != "" {
+		if sid == "last" {
+			opts.Continue = true
+			opts.Session = ""
+		} else {
+			opts.Continue = false
+			opts.Session = sid
+		}
+	}
+
+	if req.Stream {
+		handleStream(w, req, opts)
+		return
+	}
+	handleNonStream(w, req, opts)
+}
+
+func handleNonStream(w http.ResponseWriter, req ChatCompletionRequest, opts RunOptions) {
+	var content strings.Builder
+	var usage Usage
+
+	log.Printf("Running opencode (model=%s, session=%s, continue=%v, %d chars)\n",
+		opts.Model, opts.Session, opts.Continue, len(opts.Prompt))
+
+	err := runOpenCode(opts, func(ev OpenCodeEvent) error {
 		if ev.IsText() {
 			content.WriteString(ev.Part.Text)
 		}
@@ -221,7 +238,7 @@ func handleNonStream(w http.ResponseWriter, req ChatCompletionRequest, model, pr
 	json.NewEncoder(w).Encode(resp)
 }
 
-func handleStream(w http.ResponseWriter, req ChatCompletionRequest, model, prompt string) {
+func handleStream(w http.ResponseWriter, req ChatCompletionRequest, opts RunOptions) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
@@ -233,7 +250,8 @@ func handleStream(w http.ResponseWriter, req ChatCompletionRequest, model, promp
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	log.Printf("Streaming opencode (model=%s, %d chars)\n", model, len(prompt))
+	log.Printf("Streaming opencode (model=%s, session=%s, continue=%v, %d chars)\n",
+		opts.Model, opts.Session, opts.Continue, len(opts.Prompt))
 
 	writeSSE := func(v interface{}) error {
 		data, err := json.Marshal(v)
@@ -260,14 +278,7 @@ func handleStream(w http.ResponseWriter, req ChatCompletionRequest, model, promp
 	}
 
 	var usage Usage
-	runErr := runOpenCode(RunOptions{
-		Model:     model,
-		Prompt:    prompt,
-		Directory: workingDir,
-		Auto:      autoApprove,
-		Continue:  continueSession,
-		Session:   sessionID,
-	}, func(ev OpenCodeEvent) error {
+	runErr := runOpenCode(opts, func(ev OpenCodeEvent) error {
 		if ev.IsText() {
 			usage.CompletionTokens++
 			return writeSSE(map[string]interface{}{

@@ -10,3 +10,5 @@
 # Go test artifacts
 *.test
 *.out
+
+/sessions
